@@ -1,0 +1,126 @@
+@base = http://localhost:8000
+@ipToken = {{loginIp.response.body.access_token}}
+@oooToken = {{loginOoo.response.body.access_token}}
+@specToken = {{loginSpec.response.body.access_token}}
+
+### Health
+GET {{base}}/api/health
+
+### Login IP
+# @name loginIp
+POST {{base}}/api/auth/login
+Content-Type: application/json
+
+{ "login": "ip", "password": "ip123" }
+
+### Login LLC
+# @name loginOoo
+POST {{base}}/api/auth/login
+Content-Type: application/json
+
+{ "login": "ooo", "password": "ooo123" }
+
+### Login specialist
+# @name loginSpec
+POST {{base}}/api/auth/login
+Content-Type: application/json
+
+{ "login": "spec", "password": "spec123" }
+
+### Recommend
+POST {{base}}/api/recommend
+Authorization: Bearer {{ipToken}}
+Content-Type: application/json
+
+{ "purpose": "cash_gap", "amount": 800000, "term_months": 6 }
+
+### Create Kassa offer
+POST {{base}}/api/applications
+Authorization: Bearer {{ipToken}}
+Content-Type: application/json
+
+{
+  "purpose": "cash_gap",
+  "product": "kassa",
+  "requested_amount": 800000,
+  "requested_term_months": 6
+}
+
+### Create Kassa with stale profile
+POST {{base}}/api/applications
+Authorization: Bearer {{ipToken}}
+Content-Type: application/json
+
+{
+  "purpose": "cash_gap",
+  "product": "kassa",
+  "requested_amount": 500000,
+  "requested_term_months": 4,
+  "profile_changed": true
+}
+
+### Specialist queue
+GET {{base}}/api/specialist/applications?only_pending=true
+Authorization: Bearer {{specToken}}
+
+### Chaos BKI on
+POST {{base}}/api/demo/chaos
+Authorization: Bearer {{specToken}}
+Content-Type: application/json
+
+{ "bki_down": true }
+
+### Chaos BKI status
+GET {{base}}/api/demo/chaos
+Authorization: Bearer {{specToken}}
+
+### Chaos BKI off
+POST {{base}}/api/demo/chaos
+Authorization: Bearer {{specToken}}
+Content-Type: application/json
+
+{ "bki_down": false }
+
+### LLC reject then Cure
+# @name llcReject
+POST {{base}}/api/applications
+Authorization: Bearer {{oooToken}}
+Content-Type: application/json
+
+{
+  "purpose": "cash_gap",
+  "product": "kassa",
+  "requested_amount": 400000,
+  "requested_term_months": 3
+}
+
+### Cure tax
+POST {{base}}/api/applications/{{llcReject.response.body.id}}/cure
+Authorization: Bearer {{oooToken}}
+
+### Counteroffer then What-If other bank
+# @name ipCounter
+POST {{base}}/api/applications
+Authorization: Bearer {{ipToken}}
+Content-Type: application/json
+
+{
+  "purpose": "restock",
+  "product": "kassa",
+  "requested_amount": 2250000,
+  "requested_term_months": 6
+}
+
+### What-If other bank
+POST {{base}}/api/applications/{{ipCounter.response.body.id}}/what-if
+Authorization: Bearer {{ipToken}}
+Content-Type: application/json
+
+{ "action": "other_bank" }
+
+### What-If MSP collateral
+POST {{base}}/api/applications/{{ipCounter.response.body.id}}/what-if
+Authorization: Bearer {{ipToken}}
+Content-Type: application/json
+
+{ "action": "msp_collateral" }

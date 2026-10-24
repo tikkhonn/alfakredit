@@ -1,0 +1,38 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: cabinet
+      POSTGRES_PASSWORD: cabinet
+      POSTGRES_DB: cabinet
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cabinet -d cabinet"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://cabinet:cabinet@postgres:5432/cabinet
+      JWT_SECRET: hackathon-demo-secret
+      KEY_RATE: "16.5"
+      SIGN_CODE: "123456"
+      CORS_ORIGINS: http://localhost:8080,http://127.0.0.1:8080,http://localhost:5173
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+  web:
+    build: ./frontend
+    depends_on:
+      - api
+    ports:
+      - "8080:80"
+
+volumes:
+  pgdata:

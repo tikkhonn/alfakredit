@@ -1,0 +1,32 @@
+# THIRD_PARTY_NOTICES
+
+Проверяемая версия не зависит от платных API, закрытых моделей и корпоративных лицензий Альфа-Банка.
+
+## Runtime
+
+- FastAPI, Starlette, Uvicorn — MIT
+- SQLModel, SQLAlchemy, Pydantic — MIT
+- PyJWT — MIT
+- psycopg — LGPL with exceptions / zlib for binary wheels
+- React, Vite — MIT
+- Tailwind CSS — MIT
+- Lucide icons — ISC
+- PostgreSQL Docker image — PostgreSQL License
+- nginx — BSD-2
+
+## Design references (not vendored as paid assets)
+
+- 21st.dev theme «Coral Noir» (CSS tokens, free) — https://21st.dev/community/themes/coral-noir
+- 21st.dev Number Ticker by danielpetho — pattern of motion tween, reimplemented
+- 21st.dev Financial Score Cards — half-circle gauge pattern, reimplemented without liquid-glass dependencies
+
+## Simulated integrations
+
+- ЕГРЮЛ/ЕГРИП — mock://egrul
+- ФНС «Прозрачный бизнес» — mock://fns-transparent-business
+- БКИ — mock://bki
+- Подпись ДБО / Госключ — код 123456 внутри интерфейса
+
+## Datasets
+
+Синтетические компании и пользователи созданы командой. Реальных клиентов Альфа-Банка нет.

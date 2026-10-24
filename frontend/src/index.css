@@ -1,0 +1,99 @@
+@import "tailwindcss";
+
+:root {
+  --background: #070707;
+  --foreground: #f4f1ec;
+  --muted: #161616;
+  --muted-foreground: #9a958c;
+  --card: #0e0e0e;
+  --border: #222;
+  --primary: #ef3124;
+  --primary-foreground: #fffaf6;
+  --accent: #d6544b;
+  --ring: #ef3124;
+  --ok: #7dcea0;
+  --warn: #e7c27d;
+  --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Unbounded", ui-sans-serif, system-ui, sans-serif;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-card: var(--card);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --font-sans: var(--font-sans);
+  --font-display: var(--font-display);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--background);
+  color: var(--foreground);
+  letter-spacing: -0.01em;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.03) 0.5px, transparent 0.5px);
+  background-size: 3px 3px;
+  opacity: 0.35;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.display {
+  font-family: var(--font-display);
+}
+
+.hairline {
+  background: linear-gradient(90deg, transparent, rgba(239, 49, 36, 0.8), transparent);
+  height: 1px;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.fade-up {
+  animation: fadeIn 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-up {
+    animation: none;
+  }
+}
