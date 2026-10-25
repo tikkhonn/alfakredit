@@ -580,6 +580,42 @@
         }
       }
     },
+    "/api/specialist/stats": {
+      "get": {
+        "tags": [
+          "specialist"
+        ],
+        "summary": "Queue stats",
+        "operationId": "stats_api_specialist_stats_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueStats"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/specialist/applications": {
       "get": {
         "tags": [
@@ -1413,6 +1449,40 @@
           "growth"
         ],
         "title": "PurposeCode"
+      },
+      "QueueStats": {
+        "properties": {
+          "queue_size": {
+            "type": "integer",
+            "title": "Queue Size"
+          },
+          "auto_count": {
+            "type": "integer",
+            "title": "Auto Count"
+          },
+          "manual_count": {
+            "type": "integer",
+            "title": "Manual Count"
+          },
+          "auto_share": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Share"
+          }
+        },
+        "type": "object",
+        "required": [
+          "queue_size",
+          "auto_count",
+          "manual_count"
+        ],
+        "title": "QueueStats"
       },
       "RecommendRequest": {
         "properties": {

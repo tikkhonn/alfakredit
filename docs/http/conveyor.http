@@ -35,6 +35,7 @@ Content-Type: application/json
 { "purpose": "cash_gap", "amount": 800000, "term_months": 6 }
 
 ### Create Kassa offer
+# @name kassaOffer
 POST {{base}}/api/applications
 Authorization: Bearer {{ipToken}}
 Content-Type: application/json
@@ -46,7 +47,19 @@ Content-Type: application/json
   "requested_term_months": 6
 }
 
+### Accept offer
+POST {{base}}/api/applications/{{kassaOffer.response.body.id}}/accept
+Authorization: Bearer {{ipToken}}
+
+### Sign and issue
+POST {{base}}/api/applications/{{kassaOffer.response.body.id}}/sign
+Authorization: Bearer {{ipToken}}
+Content-Type: application/json
+
+{ "code": "123456" }
+
 ### Create Kassa with stale profile
+# @name staleReview
 POST {{base}}/api/applications
 Authorization: Bearer {{ipToken}}
 Content-Type: application/json
@@ -57,6 +70,43 @@ Content-Type: application/json
   "requested_amount": 500000,
   "requested_term_months": 4,
   "profile_changed": true
+}
+
+### Specialist extra request
+POST {{base}}/api/specialist/applications/{{staleReview.response.body.id}}/decision
+Authorization: Bearer {{specToken}}
+Content-Type: application/json
+
+{
+  "action": "extra_request",
+  "extra_fields": ["purpose_details"],
+  "extra_comment": "Уточните, что именно устарело в карточке"
+}
+
+### Create review for specialist offer
+# @name decisionReview
+POST {{base}}/api/applications
+Authorization: Bearer {{ipToken}}
+Content-Type: application/json
+
+{
+  "purpose": "growth",
+  "product": "razvitie",
+  "requested_amount": 3000000,
+  "requested_term_months": 18,
+  "purpose_details": "Вторая печь"
+}
+
+### Specialist offer
+POST {{base}}/api/specialist/applications/{{decisionReview.response.body.id}}/decision
+Authorization: Bearer {{specToken}}
+Content-Type: application/json
+
+{
+  "action": "offer",
+  "amount": 2500000,
+  "term_months": 18,
+  "rate_annual": 23
 }
 
 ### Specialist queue
