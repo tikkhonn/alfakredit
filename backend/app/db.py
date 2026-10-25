@@ -13,17 +13,18 @@ _ALTERS = [
     "ALTER TABLE application ADD COLUMN extra_turnover INTEGER DEFAULT 0",
     "ALTER TABLE application ADD COLUMN collateral_msp BOOLEAN DEFAULT 0",
     "ALTER TABLE application ADD COLUMN pipeline JSON",
+    "ALTER TABLE application ADD COLUMN profile_note TEXT",
 ]
 
 
 def init_db() -> None:
     SQLModel.metadata.create_all(engine)
-    with engine.begin() as conn:
-        for statement in _ALTERS:
-            try:
+    for statement in _ALTERS:
+        try:
+            with engine.begin() as conn:
                 conn.execute(text(statement))
-            except Exception:
-                continue
+        except Exception:
+            continue
 
 
 def get_session() -> Generator[Session, None, None]:

@@ -106,6 +106,7 @@ export type Application = {
   extra_comment: string | null
   decided_by: string | null
   profile_changed: boolean
+  profile_note: string | null
   extra_turnover: number
   collateral_msp: boolean
   created_at: string
@@ -123,6 +124,7 @@ export type Application = {
   pipeline: PipelineStep[]
   available_actions: string[]
   dscr: number | null
+  issued_monthly_payment: number
   risk_memo: string | null
   schedule: ScheduleRow[]
 }
@@ -144,6 +146,13 @@ export type Recommend = {
   kassa_limit: number | null
   monthly_payment: number | null
   indicative_rate: number | null
+}
+
+export type QueueStats = {
+  queue_size: number
+  auto_count: number
+  manual_count: number
+  auto_share: number | null
 }
 
 export const api = {
@@ -181,6 +190,8 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ bki_down }),
     }),
+  specialistStats: () =>
+    request<QueueStats>('/api/specialist/stats'),
   specialistQueue: (onlyPending = true) =>
     request<Application[]>(`/api/specialist/applications?only_pending=${onlyPending}`),
   specialistDossier: (id: string) => request<Application>(`/api/specialist/applications/${id}`),

@@ -12,6 +12,10 @@ const PURPOSES = [
 ]
 
 const AMOUNT_STEP = 10_000
+const SAMPLE_INVOICES: Record<string, { invoice: number; balance: number }> = {
+  '770712345678': { invoice: 680_000, balance: 220_000 },
+  '7708123456': { invoice: 910_000, balance: 150_000 },
+}
 
 function snapAmount(value: number, min: number, max: number) {
   const rounded = Math.round(value / AMOUNT_STEP) * AMOUNT_STEP
@@ -30,11 +34,14 @@ export function NewApplicationPage() {
   const [term, setTerm] = useState(6)
   const [details, setDetails] = useState('')
   const [profileChanged, setProfileChanged] = useState(false)
+  const [profileNote, setProfileNote] = useState('')
   const [rec, setRec] = useState<Recommend | null>(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [trace, setTrace] = useState<Application | null>(null)
   const company = me?.company
+  const sampleInvoice = SAMPLE_INVOICES[company?.inn || ''] || SAMPLE_INVOICES['770712345678']
+  const sampleDeficit = sampleInvoice.invoice - sampleInvoice.balance
 
   useEffect(() => {
     if (!purpose) return
@@ -79,6 +86,7 @@ export function NewApplicationPage() {
         requested_term_months: term,
         purpose_details: details || null,
         profile_changed: profileChanged,
+        profile_note: profileChanged ? profileNote.trim() : null,
       })
       setTrace(created)
     } catch (err) {
@@ -202,6 +210,19 @@ export function NewApplicationPage() {
           {rec.kassa_limit != null && product === 'kassa' ? (
             <p className="mt-2 text-sm text-muted-foreground">Сейчас доступно в «Кассе»: {rub(rec.kassa_limit)}</p>
           ) : null}
+          {purpose === 'cash_gap' ? (
+            <button
+              type="button"
+              onClick={() => setAmount(snapAmount(sampleDeficit, rec.min_amount, rec.max_amount))}
+              className="mt-4 rounded-2xl border border-white/10 px-4 py-3 text-left text-sm hover:border-primary/40"
+            >
+              Подобрать сумму по счёту
+              <span className="mt-1 block text-muted-foreground">
+                Тестовый счёт {rub(sampleInvoice.invoice)}, на расчётном счёте {rub(sampleInvoice.balance)}. Дефицит{' '}
+                {rub(sampleDeficit)}.
+              </span>
+            </button>
+          ) : null}
           <label className="mt-6 block text-xs uppercase tracking-[0.18em] text-muted-foreground">Срок, мес.</label>
           <input
             type="number"
@@ -258,17 +279,29 @@ export function NewApplicationPage() {
               type="checkbox"
               className="mt-1 accent-primary"
               checked={profileChanged}
-              onChange={(event) => setProfileChanged(event.target.checked)}
+              onChange={(event) => {
+                setProfileChanged(event.target.checked)
+                if (!event.target.checked) setProfileNote('')
+              }}
             />
             <span>Данные устарели, пусть посмотрит специалист</span>
           </label>
+          {profileChanged ? (
+            <textarea
+              className="mt-3 w-full rounded-2xl border border-white/10 bg-background px-4 py-3"
+              rows={3}
+              value={profileNote}
+              onChange={(event) => setProfileNote(event.target.value)}
+              placeholder="Что изменилось: адрес, ОКВЭД, директор"
+            />
+          ) : null}
           {error ? <p className="mt-4 text-primary">{error}</p> : null}
           <div className="mt-8 flex gap-3">
             <button onClick={() => setStep(1)} className="rounded-full border border-white/15 px-6 py-3">
               Назад
             </button>
             <button
-              disabled={busy}
+              disabled={busy || (profileChanged && !profileNote.trim())}
               onClick={submit}
               className="rounded-full bg-primary px-6 py-3 text-primary-foreground disabled:opacity-50"
             >

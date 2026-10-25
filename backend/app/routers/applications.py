@@ -18,6 +18,7 @@ from app.schemas import (
     WhatIfRequest,
 )
 from app.services import (
+    OpenApplicationError,
     accept_offer,
     apply_what_if,
     create_application,
@@ -69,7 +70,12 @@ def create_mine(
     registry: Annotated[MockRegistry, Depends(get_registry)],
 ) -> ApplicationOut:
     company = _company(user, session)
-    application = create_application(session, company, user.id, payload, registry)
+    try:
+        application = create_application(session, company, user.id, payload, registry)
+    except OpenApplicationError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return serialize_application(application, "client", company, session)
 
 

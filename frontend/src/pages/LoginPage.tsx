@@ -68,12 +68,14 @@ export function LoginPage() {
       <section className="flex items-center justify-center px-6 py-16">
         <form
           onSubmit={submit}
+          autoComplete="off"
           className="w-full max-w-md rounded-3xl border border-white/12 bg-[#141414] p-8 shadow-[0_0_80px_rgba(239,49,36,0.08)]"
         >
           <h2 className="display text-3xl">Войти в кабинет</h2>
           <p className="mt-2 text-sm text-muted-foreground">Вход для клиентов банка. Новую компанию заводить не надо.</p>
           <label className="mt-8 block text-xs uppercase tracking-[0.18em] text-muted-foreground">Логин</label>
           <input
+            autoComplete="off"
             className="mt-2 w-full rounded-2xl border border-white/10 bg-background px-4 py-3 outline-none ring-primary/40 focus:ring-2"
             value={loginName}
             onChange={(event) => setLoginName(event.target.value)}
@@ -81,6 +83,7 @@ export function LoginPage() {
           <label className="mt-5 block text-xs uppercase tracking-[0.18em] text-muted-foreground">Пароль</label>
           <input
             type="password"
+            autoComplete="new-password"
             className="mt-2 w-full rounded-2xl border border-white/10 bg-background px-4 py-3 outline-none ring-primary/40 focus:ring-2"
             value={password}
             onChange={(event) => setPassword(event.target.value)}

@@ -15,3 +15,11 @@ def test_dscr_bakery():
     value = dscr(2_500_000, "10.71", 213_500)
     assert value is not None
     assert value > 1
+
+
+def test_dscr_includes_bki_monthly_payment():
+    plain = dscr(2_500_000, "10.71", 213_500)
+    with_debt = dscr(2_500_000, "10.71", 213_500, 18_000)
+    assert plain is not None
+    assert with_debt == round(2_500_000 * 0.12 / (213_500 + 18_000), 2)
+    assert with_debt < plain

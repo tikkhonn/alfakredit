@@ -33,6 +33,7 @@ class BkiRecord:
     current_debt: int
     inquiries_90d: int
     worst_status: str
+    monthly_payment: int = 0
 
 
 class MockRegistry:

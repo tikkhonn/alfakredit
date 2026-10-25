@@ -16,6 +16,23 @@ def test_clean_ip_scores_high():
     assert result.band == "strong"
 
 
+def test_bki_timeout_scores_zero_not_clean_bureau():
+    result = score(
+        ScoringInput(
+            business_age_months=90,
+            turnovers=[2_500_000, 2_500_000, 2_500_000],
+            requested_amount=500_000,
+            bki_overdue_days=0,
+            bki_current_debt=0,
+            bki_inquiries_90d=0,
+            bki_unavailable=True,
+        )
+    )
+    bki = next(factor for factor in result.factors if factor.code == "bki")
+    assert bki.points == 0
+    assert bki.comment == "Таймаут БКИ — требуется ручная проверка"
+
+
 def test_overdue_zeroes_bki_factor():
     result = score(
         ScoringInput(

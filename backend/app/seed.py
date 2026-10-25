@@ -3,7 +3,7 @@ from datetime import date
 from sqlmodel import Session, select
 
 from app.adapters.registry import BkiRecord, EgrulRecord, FnsRecord, MockRegistry
-from app.domain.enums import ApplicationStatus, LegalForm, ProductCode, PurposeCode
+from app.domain.enums import LegalForm, ProductCode, PurposeCode
 from app.models import Application, Company, User
 from app.security import hash_password
 
@@ -51,6 +51,7 @@ def build_registry() -> MockRegistry:
                 current_debt=320_000,
                 inquiries_90d=1,
                 worst_status="ok",
+                monthly_payment=18_000,
             ),
             LLC_INN: BkiRecord(
                 inn=LLC_INN,
@@ -58,6 +59,7 @@ def build_registry() -> MockRegistry:
                 current_debt=2_400_000,
                 inquiries_90d=6,
                 worst_status="ok",
+                monthly_payment=95_000,
             ),
         },
     )
@@ -137,14 +139,22 @@ def seed_if_empty(session: Session) -> None:
 
 
 def ensure_demo_queue(session: Session) -> None:
-    pending = session.exec(
-        select(Application).where(Application.status == ApplicationStatus.IN_REVIEW.value)
-    ).first()
-    if pending:
-        return
+    from app.services import OPEN_APPLICATION_STATUSES
+
     bakery = session.exec(select(Company).where(Company.inn == IP_INN)).first()
+    if not bakery:
+        return
+    open_razvitie = session.exec(
+        select(Application).where(
+            Application.company_id == bakery.id,
+            Application.product == ProductCode.RAZVITIE.value,
+            Application.status.in_(list(OPEN_APPLICATION_STATUSES)),
+        )
+    ).first()
+    if open_razvitie:
+        return
     owner = session.exec(select(User).where(User.login == "ip")).first()
-    if not bakery or not owner:
+    if not owner:
         return
     from app.deps import get_registry
     from app.schemas import ApplicationCreate

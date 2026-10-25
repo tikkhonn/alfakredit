@@ -35,12 +35,71 @@ from app.schemas import (
     CompanyOut,
     EventOut,
     ExtraSubmit,
+    QueueStats,
     RecommendRequest,
     RecommendResponse,
     SpecialistDecision,
 )
 
 ACTIVE_DEBT_STATUSES = {ApplicationStatus.ISSUED.value, ApplicationStatus.SIGNING.value}
+OPEN_APPLICATION_STATUSES = {
+    status.value
+    for status in ApplicationStatus
+    if status not in {ApplicationStatus.ISSUED, ApplicationStatus.REJECTED, ApplicationStatus.CLOSED}
+}
+AUTO_DECISION_STATUSES = {
+    ApplicationStatus.OFFER.value,
+    ApplicationStatus.COUNTEROFFER.value,
+    ApplicationStatus.REJECTED.value,
+    ApplicationStatus.SIGNING.value,
+    ApplicationStatus.ISSUED.value,
+    ApplicationStatus.CLOSED.value,
+}
+MANUAL_QUEUE_STATUSES = {
+    ApplicationStatus.IN_REVIEW.value,
+    ApplicationStatus.EXTRA_REQUESTED.value,
+}
+
+RULE_TITLES = {
+    "stop:legal_status": "стоп: компания не действует",
+    "stop:account_blocked": "стоп: счёт ограничен",
+    "stop:tax_arrears": "стоп: налоговая задолженность",
+    "stop:bki_overdue": "стоп: просрочка в БКИ",
+    "missing_fields": "не хватает данных",
+    "fallback:bki_timeout": "БКИ не ответило, заявку смотрит специалист",
+    "cure:tax_cleared": "налог погашен, нужна ручная оценка",
+    "client:profile_changed": "клиент сообщил, что данные устарели",
+    "collateral:msp": "клиент готов к поручительству МСП",
+    "product:razvitie_requires_specialist": "«Развитие» решает специалист",
+    "score:borderline": "пограничный скоринг",
+    "kassa:within_limit": "сумма внутри лимита «Кассы»",
+    "kassa:other_bank_turnover": "учтены обороты другого банка",
+    "kassa:above_limit": "запрос выше лимита «Кассы»",
+    "score:strong": "скоринг высокий",
+    "score:good": "скоринг хороший",
+    "score:moderate": "скоринг средний",
+    "score:weak": "скоринг слабый",
+    "specialist:offer": "специалист подтвердил оферту",
+    "specialist:counteroffer": "специалист предложил другие условия",
+    "specialist:reject": "специалист отказал",
+    "specialist:extra_request": "специалист запросил уточнение",
+}
+
+
+class OpenApplicationError(ValueError):
+    pass
+
+
+def rule_title(rule: str) -> str:
+    return RULE_TITLES.get(rule, rule)
+
+
+BAND_TITLES = {
+    "strong": "высокий",
+    "good": "хороший",
+    "moderate": "средний",
+    "weak": "слабый",
+}
 
 
 def _age_months(registered_at: date, today: date | None = None) -> int:
@@ -68,6 +127,24 @@ def issued_exposure(session: Session, company_id: str, *, product: str | None = 
         if exclude_id and item.id == exclude_id:
             continue
         total += item.offer_amount or 0
+    return total
+
+
+def issued_monthly_payments(session: Session, company_id: str, *, exclude_id: str | None = None) -> int:
+    statement = select(Application).where(
+        Application.company_id == company_id,
+        Application.status == ApplicationStatus.ISSUED.value,
+    )
+    total = 0
+    for item in session.exec(statement).all():
+        if exclude_id and item.id == exclude_id:
+            continue
+        amount = item.offer_amount
+        rate = item.offer_rate
+        term = item.offer_term_months
+        if not amount or rate is None or not term:
+            continue
+        total += monthly_payment(amount, rate, term)
     return total
 
 
@@ -165,9 +242,10 @@ def enrichment_snapshot(company: Company, registry: MockRegistry, enrichment: En
         snapshot["bki"] = {
             "source": "mock://bki",
             "status": "timeout",
-            "overdue_days": 0,
-            "current_debt": 0,
-            "inquiries_90d": 0,
+            "overdue_days": None,
+            "current_debt": None,
+            "monthly_payment": None,
+            "inquiries_90d": None,
             "worst_status": "unavailable",
         }
     else:
@@ -177,6 +255,7 @@ def enrichment_snapshot(company: Company, registry: MockRegistry, enrichment: En
             "status": "ok",
             "overdue_days": bki.overdue_days,
             "current_debt": bki.current_debt,
+            "monthly_payment": bki.monthly_payment,
             "inquiries_90d": bki.inquiries_90d,
             "worst_status": bki.worst_status,
         }
@@ -190,7 +269,13 @@ def build_pipeline(enrichment: Enrichment, fns_amount: int) -> list[dict]:
     return [
         {"code": "validation", "title": "Валидация заявки", "ms": 12, "status": "ok", "detail": "Сумма, срок, роль клиента"},
         {"code": "abs", "title": "АБС / ПДН", "ms": 15, "status": "ok", "detail": "Карточка клиента из банка"},
-        {"code": "egrul", "title": "ЕГРЮЛ / ЕГРИП", "ms": 38, "status": "ok", "detail": enrichment.legal_status},
+        {
+            "code": "egrul",
+            "title": "ЕГРЮЛ / ЕГРИП",
+            "ms": 38,
+            "status": "ok",
+            "detail": "действует" if enrichment.legal_status == "active" else enrichment.legal_status,
+        },
         {
             "code": "fns",
             "title": "ФНС",
@@ -227,17 +312,35 @@ def risk_memo(application: Application, company: Company) -> str:
         lines.append(f"Цель: {application.purpose_details}.")
     total = scoring.get("total")
     if total is not None:
-        lines.append(f"Скоринг {total}/100 ({scoring.get('band')}). Это подсказка, не решение.")
+        band = BAND_TITLES.get(str(scoring.get("band")), str(scoring.get("band")))
+        lines.append(f"Скоринг {total}/100, {band}. Это подсказка, не решение.")
     weak = [factor["title"] for factor in factors if factor.get("points", 0) < factor.get("max_points", 1) / 2]
     if weak:
         lines.append("Слабые места: " + ", ".join(weak) + ".")
     rules = policy.get("rules") or []
     if rules:
-        lines.append("Путь правил: " + " → ".join(str(rule) for rule in rules) + ".")
+        lines.append("Путь правил: " + " → ".join(rule_title(str(rule)) for rule in rules) + ".")
+    if application.extra_turnover:
+        lines.append(
+            f"К обороту добавлена выписка из другого банка: {application.extra_turnover:,} ₽ в месяц.".replace(",", " ")
+        )
+    if application.profile_note:
+        lines.append(f"Клиент пишет, что устарело: {application.profile_note}.")
     summary = policy.get("specialist_summary")
     if summary:
         lines.append(str(summary))
     return " ".join(lines)
+
+
+def dscr_sentence(value: float, payment: int, issued_monthly: int, bki_payment: int, bki_known: bool) -> str:
+    def money(amount: int) -> str:
+        return f"{amount:,} ₽".replace(",", " ")
+
+    bureau = money(bki_payment) if bki_known else "Н/Д"
+    return (
+        f"DSCR {value} — прибыль по ОКВЭД / (платёж по заявке {money(payment)} "
+        f"+ платежи по выданным {money(issued_monthly)} + платёж БКИ {bureau})."
+    )
 
 
 def _next_public_number(session: Session) -> str:
@@ -356,6 +459,21 @@ def create_application(
     registry: MockRegistry,
 ) -> Application:
     product = PRODUCTS[payload.product]
+    note = (payload.profile_note or "").strip() or None
+    if payload.profile_changed and not note:
+        raise ValueError("Опишите, что устарело в карточке")
+    open_application = session.exec(
+        select(Application).where(
+            Application.company_id == company.id,
+            Application.product == payload.product.value,
+            col(Application.status).in_(OPEN_APPLICATION_STATUSES),
+        )
+    ).first()
+    if open_application:
+        raise OpenApplicationError(
+            f"Уже есть заявка {open_application.public_number} на «{product.name}». "
+            "Дождитесь решения по ней."
+        )
     application = Application(
         public_number=_next_public_number(session),
         company_id=company.id,
@@ -366,6 +484,7 @@ def create_application(
         requested_term_months=payload.requested_term_months,
         purpose_details=payload.purpose_details,
         profile_changed=payload.profile_changed,
+        profile_note=note if payload.profile_changed else None,
         status=ApplicationStatus.SUBMITTED.value,
         extra_fields=[],
         pipeline=[],
@@ -506,6 +625,10 @@ def specialist_decide(
     }
     if payload.action not in mapping:
         raise ValueError("Неизвестное действие специалиста")
+    if payload.action == "reject" and not (payload.reject_reason or "").strip():
+        raise ValueError("Напишите причину отказа")
+    if payload.action == "extra_request" and not (payload.extra_comment or "").strip():
+        raise ValueError("Напишите, что нужно уточнить")
     action = mapping[payload.action]
     if application.status != ApplicationStatus.IN_REVIEW.value:
         raise IllegalTransitionError("Заявка не в очереди специалиста")
@@ -514,6 +637,14 @@ def specialist_decide(
         amount = round_amount(payload.amount or application.requested_amount)
         term = payload.term_months or application.requested_term_months
         rate = payload.rate_annual if payload.rate_annual is not None else 25.5
+        baseline_rate = application.offer_rate if application.offer_rate is not None else 25.5
+        if (
+            payload.action == "counteroffer"
+            and amount == application.requested_amount
+            and term == application.requested_term_months
+            and rate == baseline_rate
+        ):
+            raise ValueError("Для встречки измените сумму, срок или ставку")
         application.offer_amount = amount
         application.offer_term_months = term
         application.offer_rate = rate
@@ -524,13 +655,13 @@ def specialist_decide(
                 f"Специалист готов выдать {amount:,} ₽ на {term} мес. под {rate}%.".replace(",", " ")
             )
     elif payload.action == "reject":
-        application.client_message = payload.reject_reason or "По этой заявке банк не может выдать кредит."
+        application.client_message = (payload.reject_reason or "").strip()
         application.offer_amount = None
         application.offer_term_months = None
         application.offer_rate = None
     else:
         application.extra_fields = payload.extra_fields or ["purpose_details"]
-        application.extra_comment = payload.extra_comment or "Уточните, на что пойдут деньги."
+        application.extra_comment = (payload.extra_comment or "").strip()
         application.client_message = application.extra_comment
 
     application.decided_by = "specialist"
@@ -600,7 +731,17 @@ def serialize_application(
             ScoringResult(total=int(application.scoring["total"]), max_total=100),
         )
     payment = monthly_payment(amount, rate, term) if rate else None
-    avg = int(mean(company.turnovers)) if company and company.turnovers else 0
+    avg = int(mean(company.turnovers)) + application.extra_turnover if company and company.turnovers else 0
+    bki_snapshot = ((application.enrichment or {}).get("bki") or {})
+    bki_known = bki_snapshot.get("status") != "timeout"
+    bki_payment = int(bki_snapshot.get("monthly_payment") or 0) if bki_known else 0
+    issued_monthly = (
+        issued_monthly_payments(session, company.id, exclude_id=application.id) if session and company else 0
+    )
+    dscr_value = dscr(avg, company.okved, payment, issued_monthly + bki_payment) if show_internal and company and payment else None
+    memo = risk_memo(application, company) if show_internal and company else None
+    if memo and dscr_value is not None and payment is not None:
+        memo = f"{memo} {dscr_sentence(dscr_value, payment, issued_monthly, bki_payment, bki_known)}"
     return ApplicationOut(
         id=application.id,
         public_number=application.public_number,
@@ -620,6 +761,7 @@ def serialize_application(
         extra_comment=application.extra_comment,
         decided_by=application.decided_by,
         profile_changed=application.profile_changed,
+        profile_note=application.profile_note,
         extra_turnover=application.extra_turnover,
         collateral_msp=application.collateral_msp,
         created_at=application.created_at,
@@ -642,9 +784,31 @@ def serialize_application(
         enrichment=application.enrichment if show_internal else None,
         pipeline=application.pipeline or [],
         available_actions=_specialist_actions(application) if show_internal else _client_actions(application),
-        dscr=dscr(avg, company.okved, payment) if show_internal and company and payment else None,
-        risk_memo=risk_memo(application, company) if show_internal and company else None,
+        dscr=dscr_value,
+        issued_monthly_payment=issued_monthly,
+        risk_memo=memo,
         schedule=payment_schedule(amount, rate, term) if rate else [],
+    )
+
+
+def queue_stats(session: Session) -> QueueStats:
+    applications = list(session.exec(select(Application)).all())
+    auto_count = sum(
+        1
+        for item in applications
+        if item.decided_by == "system" and item.status in AUTO_DECISION_STATUSES
+    )
+    manual_count = sum(
+        1
+        for item in applications
+        if item.decided_by == "specialist" or item.status in MANUAL_QUEUE_STATUSES
+    )
+    total = auto_count + manual_count
+    return QueueStats(
+        queue_size=sum(1 for item in applications if item.status == ApplicationStatus.IN_REVIEW.value),
+        auto_count=auto_count,
+        manual_count=manual_count,
+        auto_share=round(100 * auto_count / total) if total else None,
     )
 
 

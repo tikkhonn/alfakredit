@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { api, type Application } from '../lib/api'
+import { api, type Application, type QueueStats } from '../lib/api'
 import { PRODUCT_LABEL, PURPOSE_LABEL, STATUS_TONE, dateTime, rub } from '../lib/format'
 
 export function SpecialistQueuePage() {
   const [pending, setPending] = useState(true)
   const [items, setItems] = useState<Application[]>([])
+  const [stats, setStats] = useState<QueueStats | null>(null)
 
   useEffect(() => {
     api.specialistQueue(pending).then(setItems).catch(() => undefined)
+    api.specialistStats().then(setStats).catch(() => undefined)
   }, [pending])
 
   return (
@@ -33,6 +35,14 @@ export function SpecialistQueuePage() {
           </button>
         </div>
       </div>
+      {stats ? (
+        <p className="mt-4 text-sm text-muted-foreground">
+          Автоконвейер {stats.auto_share == null ? '—' : `${stats.auto_share}%`}
+          {' · '}
+          вручную {stats.manual_count}
+          {' · '}в очереди {stats.queue_size}
+        </p>
+      ) : null}
 
       <div className="mt-8 overflow-hidden rounded-3xl border border-white/8">
         {items.length === 0 ? (

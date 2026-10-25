@@ -22,6 +22,7 @@ class ScoringInput:
     bki_current_debt: int
     bki_inquiries_90d: int
     issued_debt: int = 0
+    bki_unavailable: bool = False
 
 
 @dataclass(frozen=True)
@@ -91,7 +92,17 @@ def _stability_factor(turnovers: list[int]) -> FactorScore:
     return FactorScore("stability", "Стабильность оборотов", points, 20, comment)
 
 
-def _bki_factor(overdue_days: int, current_debt: int, inquiries: int, avg_turnover: int, issued_debt: int) -> FactorScore:
+def _bki_factor(
+    overdue_days: int,
+    current_debt: int,
+    inquiries: int,
+    avg_turnover: int,
+    issued_debt: int,
+    *,
+    unavailable: bool = False,
+) -> FactorScore:
+    if unavailable:
+        return FactorScore("bki", "Кредитная история", 0, 30, "Таймаут БКИ — требуется ручная проверка")
     if overdue_days > 0:
         return FactorScore("bki", "Кредитная история", 0, 30, "Есть действующая просрочка")
     points = 30
@@ -122,7 +133,14 @@ def score(inp: ScoringInput) -> ScoringResult:
         _age_factor(inp.business_age_months),
         _amount_factor(inp.requested_amount, inp.issued_debt, avg),
         _stability_factor(inp.turnovers),
-        _bki_factor(inp.bki_overdue_days, inp.bki_current_debt, inp.bki_inquiries_90d, avg, inp.issued_debt),
+        _bki_factor(
+            inp.bki_overdue_days,
+            inp.bki_current_debt,
+            inp.bki_inquiries_90d,
+            avg,
+            inp.issued_debt,
+            unavailable=inp.bki_unavailable,
+        ),
     ]
     total = sum(f.points for f in factors)
     return ScoringResult(total=total, max_total=100, factors=factors)

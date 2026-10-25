@@ -15,7 +15,7 @@ const INTENTS = [
 export function DashboardPage() {
   const { me, refresh } = useAuth()
   const navigate = useNavigate()
-  const [items, setItems] = useState<Application[]>([])
+  const [items, setItems] = useState<Application[] | null>(null)
   const company = me?.company
 
   useEffect(() => {
@@ -37,7 +37,7 @@ export function DashboardPage() {
         {[
           { label: 'Средний оборот', value: company.avg_turnover, suffix: ' ₽' },
           { label: 'Доступно в «Кассе»', value: company.kassa_limit, suffix: ' ₽' },
-          { label: 'Заявок', value: items.length, suffix: '' },
+          { label: 'Заявок', value: items?.length ?? 0, suffix: '' },
         ].map((card, index) => (
           <div
             key={card.label}
@@ -77,7 +77,7 @@ export function DashboardPage() {
       <div>
         <h2 className="display mb-4 text-2xl">Заявки</h2>
         <div className="overflow-hidden rounded-3xl border border-white/8">
-          {items.length === 0 ? (
+          {items === null ? null : items.length === 0 ? (
             <div className="px-6 py-12 text-muted-foreground">Пока пусто. Начните с задачи бизнеса.</div>
           ) : (
             items.map((item) => (

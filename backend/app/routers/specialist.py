@@ -8,10 +8,18 @@ from app.deps import require_specialist
 from app.domain.enums import ApplicationStatus
 from app.domain.state_machine import IllegalTransitionError
 from app.models import Application, Company, User
-from app.schemas import ApplicationOut, SpecialistDecision
-from app.services import list_applications, serialize_application, specialist_decide
+from app.schemas import ApplicationOut, QueueStats, SpecialistDecision
+from app.services import list_applications, queue_stats, serialize_application, specialist_decide
 
 router = APIRouter(tags=["specialist"])
+
+
+@router.get("/specialist/stats", response_model=QueueStats)
+def stats(
+    user: Annotated[User, Depends(require_specialist)],
+    session: Annotated[Session, Depends(get_session)],
+) -> QueueStats:
+    return queue_stats(session)
 
 
 @router.get("/specialist/applications", response_model=list[ApplicationOut])

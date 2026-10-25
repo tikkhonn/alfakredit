@@ -146,7 +146,7 @@ def apply_policy(
             limit_amount=limit,
         )
 
-    if enrichment.tax_cured:
+    if enrichment.tax_cured and not enrichment.extra_turnover:
         return PolicyDecision(
             outcome=Outcome.REVIEW,
             product=product_code,

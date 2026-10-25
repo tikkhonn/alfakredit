@@ -66,6 +66,7 @@ class Application(SQLModel, table=True):
     client_message: str | None = None
     decided_by: str | None = None
     profile_changed: bool = False
+    profile_note: str | None = None
     extra_turnover: int = 0
     collateral_msp: bool = False
     pipeline: list[dict[str, Any]] = Field(default_factory=list, sa_column=Column(JSON, nullable=False))

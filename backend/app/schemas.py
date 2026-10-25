@@ -78,6 +78,7 @@ class ApplicationCreate(BaseModel):
     requested_term_months: int = Field(gt=0)
     purpose_details: str | None = None
     profile_changed: bool = False
+    profile_note: str | None = None
 
 
 class ExtraSubmit(BaseModel):
@@ -96,6 +97,13 @@ class WhatIfRequest(BaseModel):
 
 class ChaosRequest(BaseModel):
     bki_down: bool
+
+
+class QueueStats(BaseModel):
+    queue_size: int
+    auto_count: int
+    manual_count: int
+    auto_share: int | None = None
 
 
 class SpecialistDecision(BaseModel):
@@ -137,6 +145,7 @@ class ApplicationOut(BaseModel):
     extra_comment: str | None
     decided_by: str | None
     profile_changed: bool = False
+    profile_note: str | None = None
     extra_turnover: int = 0
     collateral_msp: bool = False
     created_at: datetime
@@ -149,5 +158,6 @@ class ApplicationOut(BaseModel):
     pipeline: list[dict[str, Any]] = Field(default_factory=list)
     available_actions: list[str] = Field(default_factory=list)
     dscr: float | None = None
+    issued_monthly_payment: int = 0
     risk_memo: str | None = None
     schedule: list[dict[str, Any]] = Field(default_factory=list)

@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { TurnoverChart } from '../components/TurnoverChart'
 import { ScoreGauge } from '../components/ui/ScoreGauge'
 import { api, type Application } from '../lib/api'
-import { PRODUCT_LABEL, PURPOSE_LABEL, ageLabel, dateTime, rub } from '../lib/format'
+import { PRODUCT_LABEL, PURPOSE_LABEL, ageLabel, dateTime, registryStatus, rub, ruleLabel } from '../lib/format'
 
 const AMOUNT_STEP = 10_000
 
@@ -42,8 +42,8 @@ export function SpecialistDossierPage() {
         term_months: term,
         rate_annual: rate,
         extra_fields: ['purpose_details'],
-        extra_comment: comment || 'Уточните, на что пойдут деньги',
-        reject_reason: comment || 'Недостаточно устойчивости денежного потока для этой суммы.',
+        extra_comment: comment.trim(),
+        reject_reason: comment.trim(),
       })
       setItem(updated)
     } catch (err) {
@@ -56,12 +56,21 @@ export function SpecialistDossierPage() {
   if (!item) return <div className="text-muted-foreground">Открываем досье…</div>
   const scoring = item.scoring
   const company = item.company
-  const rules = ((item.policy?.rules as string[]) || []).join(' → ')
+  const rules = ((item.policy?.rules as string[]) || []).map(ruleLabel).join(' → ')
   const enrichment = item.enrichment as {
     fns?: { tax_arrears: boolean; arrears_amount: number }
-    bki?: { overdue_days: number; current_debt: number }
+    bki?: { status?: string; overdue_days: number | null; current_debt: number | null; monthly_payment?: number | null }
     egrul?: { status: string }
   } | null
+  const commentReady = comment.trim().length > 0
+  const otherBank = item.extra_turnover || 0
+  const turnoverSeries = (company?.turnovers || []).map((value) => value + otherBank)
+  const baselineRate = item.offer_rate ?? 25.5
+  const counterofferUnchanged =
+    amount === item.requested_amount && term === item.requested_term_months && rate === baselineRate
+  const bkiKnown = enrichment?.bki?.status !== 'timeout'
+  const aboveKassaLimit = item.product === 'kassa' && company != null && amount > company.kassa_limit
+  const weakDscr = item.dscr != null && item.dscr < 1
 
   return (
     <div className="fade-up grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
@@ -74,6 +83,7 @@ export function SpecialistDossierPage() {
             {item.requested_term_months} мес.
           </p>
           {item.purpose_details ? <p className="mt-2 text-sm">Цель клиента: {item.purpose_details}</p> : null}
+          {item.profile_note ? <p className="mt-2 text-sm">Что устарело: {item.profile_note}</p> : null}
         </div>
         {scoring ? <ScoreGauge value={scoring.total} /> : null}
         {company ? (
@@ -94,7 +104,10 @@ export function SpecialistDossierPage() {
             </div>
             <div className="col-span-2">
               <dt className="text-muted-foreground">Среднемесячный оборот</dt>
-              <dd className="text-lg">{rub(company.avg_turnover)}</dd>
+              <dd className="text-lg">
+                {rub((company.avg_turnover || 0) + otherBank)}
+                {otherBank ? <span className="mt-1 block text-sm text-muted-foreground">из другого банка {rub(otherBank)}</span> : null}
+              </dd>
             </div>
           </dl>
         ) : null}
@@ -102,11 +115,14 @@ export function SpecialistDossierPage() {
           <div className="rounded-3xl border border-white/8 p-5">
             <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Обороты, 6 месяцев</div>
             <div className="mt-3">
-              <TurnoverChart values={company.turnovers} />
+              <TurnoverChart values={turnoverSeries} />
             </div>
             {item.dscr != null ? (
               <p className="mt-3 text-sm">
-                DSCR {item.dscr.toFixed(2)} — оценка прибыли по ОКВЭД к платежу в месяц.
+                DSCR {item.dscr.toFixed(2)} — прибыль по ОКВЭД / (платёж по заявке
+                {item.monthly_payment ? ` ${rub(item.monthly_payment)}` : ''} + платежи по выданным{' '}
+                {rub(item.issued_monthly_payment)} + платёж БКИ{' '}
+                {bkiKnown ? rub(enrichment?.bki?.monthly_payment) : 'Н/Д'}).
               </p>
             ) : null}
             {item.monthly_payment ? (
@@ -128,7 +144,7 @@ export function SpecialistDossierPage() {
         <dl className="grid grid-cols-2 gap-3 rounded-3xl border border-white/8 p-5 text-sm">
           <div>
             <dt className="text-muted-foreground">ЕГРЮЛ</dt>
-            <dd>{enrichment?.egrul?.status}</dd>
+            <dd>{registryStatus(enrichment?.egrul?.status)}</dd>
           </div>
           <div>
             <dt className="text-muted-foreground">ФНС</dt>
@@ -136,11 +152,14 @@ export function SpecialistDossierPage() {
           </div>
           <div>
             <dt className="text-muted-foreground">БКИ просрочка</dt>
-            <dd>{enrichment?.bki?.overdue_days ?? 0} дн.</dd>
+            <dd>{bkiKnown ? `${enrichment?.bki?.overdue_days ?? 0} дн.` : 'Н/Д (таймаут бюро)'}</dd>
           </div>
           <div>
             <dt className="text-muted-foreground">Долг в БКИ</dt>
-            <dd>{rub(enrichment?.bki?.current_debt)}</dd>
+            <dd>
+              {bkiKnown ? rub(enrichment?.bki?.current_debt) : 'Требуется ручная проверка'}
+              {bkiKnown && enrichment?.bki?.monthly_payment ? `, ${rub(enrichment.bki.monthly_payment)} / мес.` : ''}
+            </dd>
           </div>
         </dl>
         {item.pipeline.length ? (
@@ -213,27 +232,36 @@ export function SpecialistDossierPage() {
           value={comment}
           onChange={(event) => setComment(event.target.value)}
         />
+        {aboveKassaLimit ? (
+          <p className="mt-3 text-sm text-warn">Сумма выше доступного лимита «Кассы».</p>
+        ) : null}
+        {weakDscr ? (
+          <p className="mt-3 text-sm text-warn">DSCR ниже 1: платёж больше расчётной прибыли.</p>
+        ) : null}
+        {counterofferUnchanged && item.available_actions.includes('counteroffer') ? (
+          <p className="mt-3 text-sm text-muted-foreground">Для встречки измените сумму, срок или ставку.</p>
+        ) : null}
         {error ? <p className="mt-3 text-primary">{error}</p> : null}
         <div className="mt-6 grid grid-cols-2 gap-3">
           <button disabled={busy || !item.available_actions.includes('offer')} onClick={() => decide('offer')} className="rounded-full bg-ok/20 py-3 text-ok disabled:opacity-30">
             Оферта
           </button>
           <button
-            disabled={busy || !item.available_actions.includes('counteroffer')}
+            disabled={busy || counterofferUnchanged || !item.available_actions.includes('counteroffer')}
             onClick={() => decide('counteroffer')}
             className="rounded-full bg-warn/20 py-3 text-warn disabled:opacity-30"
           >
             Встречка
           </button>
           <button
-            disabled={busy || !item.available_actions.includes('extra_request')}
+            disabled={busy || !commentReady || !item.available_actions.includes('extra_request')}
             onClick={() => decide('extra_request')}
             className="rounded-full border border-white/15 py-3 disabled:opacity-30"
           >
             Дозапрос
           </button>
           <button
-            disabled={busy || !item.available_actions.includes('reject')}
+            disabled={busy || !commentReady || !item.available_actions.includes('reject')}
             onClick={() => decide('reject')}
             className="rounded-full bg-primary/20 py-3 text-primary disabled:opacity-30"
           >

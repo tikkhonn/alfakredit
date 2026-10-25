@@ -59,10 +59,11 @@ def estimated_monthly_profit(avg_turnover: int, okved: str) -> int:
     return int(round(avg_turnover * margin))
 
 
-def dscr(avg_turnover: int, okved: str, payment: int) -> float | None:
-    if payment <= 0:
+def dscr(avg_turnover: int, okved: str, payment: int, other_debt_payment: int = 0) -> float | None:
+    total_payment = payment + max(0, other_debt_payment)
+    if total_payment <= 0:
         return None
-    return round(estimated_monthly_profit(avg_turnover, okved) / payment, 2)
+    return round(estimated_monthly_profit(avg_turnover, okved) / total_payment, 2)
 
 
 def extra_turnover_for_request(avg_turnover: int, issued: int, requested: int, share: float = 0.5) -> int:

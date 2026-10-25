@@ -16,15 +16,19 @@ def decide(
     enrichment: Enrichment,
     key_rate: float,
 ) -> tuple[ScoringResult, PolicyDecision, str]:
+    turnovers = list(enrichment.turnovers)
+    if enrichment.extra_turnover:
+        turnovers = [value + enrichment.extra_turnover for value in turnovers]
     scoring = score(
         ScoringInput(
             business_age_months=enrichment.business_age_months,
-            turnovers=enrichment.turnovers,
+            turnovers=turnovers,
             requested_amount=requested_amount,
             bki_overdue_days=enrichment.bki_overdue_days,
             bki_current_debt=enrichment.bki_current_debt,
             bki_inquiries_90d=enrichment.bki_inquiries_90d,
             issued_debt=enrichment.issued_debt,
+            bki_unavailable=enrichment.bki_unavailable,
         )
     )
     decision = apply_policy(
